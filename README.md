@@ -1,7 +1,7 @@
 # Hat Yai Rain
 
 Data pipeline สำหรับติดตามปริมาณฝนและระดับน้ำในพื้นที่หาดใหญ่และจังหวัดสงขลา
-ฝึกงาน Data Engineering ครบวงจร: ดึง API, รับไฟล์ Excel, Data Quality, Star Schema, Orchestration และ Dashboard
+ดึง API, รับไฟล์ Excel, Data Quality, Star Schema, Orchestration และ Dashboard
 
 ## Architecture (เป้าหมาย)
 
