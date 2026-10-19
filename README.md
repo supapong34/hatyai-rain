@@ -11,13 +11,6 @@ Open-Meteo API ──(ทุกชั่วโมง)──┐
 inbox/*.xlsx ──(วางไฟล์)───────┘
 ```
 
-## Roadmap
-
-- [x] **ขั้น 1** ดึงฝนรายชั่วโมงจาก Open-Meteo โหลดเข้า SQL Server (incremental + backfill)
-- [ ] **ขั้น 2** รับไฟล์ Excel ระดับน้ำผ่านโฟลเดอร์ inbox พร้อม validate
-- [ ] **ขั้น 3** Orchestration ด้วย Airflow
-- [ ] **ขั้น 4** dbt แปลงเป็น Star Schema พร้อม tests และ snapshot (SCD2)
-- [ ] **ขั้น 5** Power BI dashboard
 
 ## Data Source
 
