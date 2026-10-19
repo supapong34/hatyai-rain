@@ -1,0 +1,5 @@
+station_id,name_th,aliases,location_id,warning_level_m,critical_level_m
+WL01,คลองอู่ตะเภา สะเดา,อู่ตะเภา สะเดา|U-Tapao Sadao,sadao,6.0,7.5
+WL02,คลองอู่ตะเภา คลองหอยโข่ง,อู่ตะเภา คลองหอยโข่ง|U-Tapao Khlong Hoi Khong,khlonghoikhong,7.0,8.5
+WL03,คลองอู่ตะเภา หาดใหญ่,อู่ตะเภา หาดใหญ่|U-Tapao Hat Yai,hatyai,8.5,10.0
+WL04,คลองอู่ตะเภา บางกล่ำ,อู่ตะเภา บางกล่ำ|U-Tapao Bang Klam,bangklam,5.5,7.0

@@ -11,6 +11,13 @@ Open-Meteo API ──(ทุกชั่วโมง)──┐
 inbox/*.xlsx ──(วางไฟล์)───────┘
 ```
 
+## Roadmap
+
+- [x] **ขั้น 1** ดึงฝนรายชั่วโมงจาก Open-Meteo โหลดเข้า SQL Server (incremental + backfill)
+- [x] **ขั้น 2** รับไฟล์ Excel ระดับน้ำผ่านโฟลเดอร์ inbox พร้อม validate
+- [ ] **ขั้น 3** Orchestration ด้วย Airflow
+- [ ] **ขั้น 4** dbt แปลงเป็น Star Schema พร้อม tests และ snapshot (SCD2)
+- [ ] **ขั้น 5** Power BI dashboard
 
 ## Data Source
 
@@ -58,6 +65,27 @@ python src/ingest_rain_api.py --mode backfill --start 2026-09-01 --end 2026-10-1
 python src/ingest_rain_api.py --mode incremental
 ```
 
+## Step 2: Excel inbox (ระดับน้ำ)
+
+ข้อมูลระดับน้ำเป็น **ข้อมูลจำลอง** ของ 4 จุดตามคลองอู่ตะเภา (`config/water_stations.csv`)
+
+```bash
+# สร้างตาราง: เปิด sql/02_water_level.sql ใน SSMS แล้วกด F5
+
+python src/make_sample_excel.py --days 7 --with-errors   # สร้างไฟล์ตัวอย่างใน data/inbox
+python src/ingest_excel_inbox.py                         # ประมวลผลทุกไฟล์ใน inbox
+```
+
+| กรณี | ผลลัพธ์ |
+|---|---|
+| ไฟล์ปกติ | `data/processed/` |
+| บางแถวผิด | โหลดแถวที่ถูก แถวที่ผิดเขียนลง `data/rejected/*_errors.csv` |
+| หัวคอลัมน์ไม่ครบ / ไม่มี sheet / เปิดไม่ได้ | ปฏิเสธทั้งไฟล์ ย้ายไป `data/rejected/` |
+| เนื้อหาซ้ำกับไฟล์เดิม (SHA-256) | ข้าม ไม่โหลดซ้ำ |
+| วันที่ปี พ.ศ., เวลา `6.00` หรือ `6.00 น.`, ชื่อสถานีมีช่องว่าง | แปลงให้อัตโนมัติ |
+
+ทุกไฟล์ถูกบันทึกใน `meta.file_loads` และทุกแถวใน `raw.water_level_readings` มี `source_file` บอกว่ามาจากไฟล์ไหน
+
 ## Check (SSMS)
 
 เชื่อมต่อด้วย Server `localhost,1433`, SQL Server Authentication, login `sa`
@@ -69,6 +97,10 @@ python src/ingest_rain_api.py --mode incremental
 config/locations.csv     พิกัดที่ต้องการดึงข้อมูล
 sql/init.sql             สร้างฐานข้อมูล schema และตาราง
 sql/queries.sql          query ตัวอย่างสำหรับฝึกใน SSMS
+sql/02_water_level.sql   ตารางระดับน้ำและ log ไฟล์ (ขั้นที่ 2)
+config/water_stations.csv  สถานีวัดระดับน้ำ (จำลอง) และชื่อเรียกอื่น
+src/make_sample_excel.py   สร้างไฟล์ Excel ตัวอย่าง
+src/ingest_excel_inbox.py  pipeline ขั้นที่ 2
 src/ingest_rain_api.py   pipeline ขั้นที่ 1
 data/raw/                ไฟล์ดิบ (ไม่ขึ้น git)
 ```
