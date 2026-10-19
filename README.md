@@ -1,4 +1,4 @@
-# Hat Yai Rain Pipeline
+# Hat Yai Rain
 
 Data pipeline สำหรับติดตามปริมาณฝนและระดับน้ำในพื้นที่หาดใหญ่และจังหวัดสงขลา
 ฝึกงาน Data Engineering ครบวงจร: ดึง API, รับไฟล์ Excel, Data Quality, Star Schema, Orchestration และ Dashboard
@@ -7,13 +7,13 @@ Data pipeline สำหรับติดตามปริมาณฝนแล
 
 ```
 Open-Meteo API ──(ทุกชั่วโมง)──┐
-                               ├─> raw (JSON) ─> PostgreSQL raw ─> dbt ─> Star Schema ─> Power BI
+                               ├─> raw (JSON) ─> SQL Server raw ─> dbt ─> Star Schema ─> Power BI
 inbox/*.xlsx ──(วางไฟล์)───────┘
 ```
 
 ## Roadmap
 
-- [x] **ขั้น 1** ดึงฝนรายชั่วโมงจาก Open-Meteo โหลดเข้า PostgreSQL (incremental + backfill)
+- [x] **ขั้น 1** ดึงฝนรายชั่วโมงจาก Open-Meteo โหลดเข้า SQL Server (incremental + backfill)
 - [ ] **ขั้น 2** รับไฟล์ Excel ระดับน้ำผ่านโฟลเดอร์ inbox พร้อม validate
 - [ ] **ขั้น 3** Orchestration ด้วย Airflow
 - [ ] **ขั้น 4** dbt แปลงเป็น Star Schema พร้อม tests และ snapshot (SCD2)
@@ -31,19 +31,24 @@ inbox/*.xlsx ──(วางไฟล์)───────┘
 |---|---|---|
 | Grain | 1 พิกัด ต่อ 1 ชั่วโมง | ตรงกับความละเอียดของ API |
 | Incremental | ดึงย้อนหลัง 3 วันทุกรอบ + upsert | ค่าล่าสุดอาจถูกปรับแก้ จึงดึงทับแทนใช้ watermark |
-| Idempotency | `PRIMARY KEY (location_id, ts)` + `ON CONFLICT` | รันซ้ำแล้วข้อมูลไม่ซ้ำ |
+| Idempotency | `PRIMARY KEY (location_id, ts)` + `MERGE` | รันซ้ำแล้วข้อมูลไม่ซ้ำ |
+| Load metrics | `MERGE ... OUTPUT $action` | แยกนับแถวที่เพิ่มใหม่กับแถวที่อัปเดต |
 | Raw layer | เก็บ JSON ดิบทุกครั้ง | ย้อนประมวลผลใหม่ได้โดยไม่ต้องเรียก API |
-| Timezone | `TIMESTAMPTZ` | กันความสับสนเรื่องเวลา UTC กับเวลาไทย |
+| Timezone | `DATETIMEOFFSET` | เก็บเวลาพร้อม offset +07:00 กันความสับสนเรื่องเวลา |
 | Data quality | หยุดทั้งรอบเมื่อพบค่าผิดปกติ | ไม่ให้ข้อมูลเสียเข้าฐาน |
 | Observability | `meta.pipeline_runs` | ดูสถานะ จำนวนแถว และข้อผิดพลาดย้อนหลัง |
 
 ## Setup
 
-ต้องมี Docker และ Python 3.10+
+ต้องมี Docker, Python 3.10+ และ SSMS (ถ้าจะดูข้อมูลผ่านหน้าจอ)
 
 ```bash
-cp .env.example .env            # แล้วแก้รหัสผ่าน
-docker compose up -d            # เปิด PostgreSQL และสร้างตาราง
+cp .env.example .env            # แล้วแก้รหัสผ่าน sa
+docker compose up -d            # เปิด SQL Server 2022 (Developer edition)
+docker ps                       # รอจนขึ้น (healthy)
+
+# สร้างฐานข้อมูลและตาราง (หรือเปิด sql/init.sql ใน SSMS แล้วกด F5)
+docker exec rain_mssql bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -i /sql/init.sql'
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -60,29 +65,17 @@ python src/ingest_rain_api.py --mode backfill --start 2026-09-01 --end 2026-10-1
 python src/ingest_rain_api.py --mode incremental
 ```
 
-## Check
+## Check (SSMS)
 
-```bash
-docker exec -it rain_postgres psql -U rain -d rain_dw
-```
-
-```sql
--- สถานะการรันล่าสุด
-SELECT run_id, mode, status, rows_loaded, started_at
-FROM meta.pipeline_runs ORDER BY run_id DESC LIMIT 5;
-
--- ฝนสะสม 24 ชั่วโมงล่าสุดแต่ละพิกัด
-SELECT location_id, SUM(precipitation_mm) AS rain_24h_mm
-FROM raw.open_meteo_hourly
-WHERE ts > now() - interval '24 hours'
-GROUP BY location_id;
-```
+เชื่อมต่อด้วย Server `localhost,1433`, SQL Server Authentication, login `sa`
+และติ๊ก **Trust server certificate** จากนั้นเปิด `sql/queries.sql`
 
 ## Project Structure
 
 ```
 config/locations.csv     พิกัดที่ต้องการดึงข้อมูล
-sql/init.sql             สร้าง schema และตาราง
+sql/init.sql             สร้างฐานข้อมูล schema และตาราง
+sql/queries.sql          query ตัวอย่างสำหรับฝึกใน SSMS
 src/ingest_rain_api.py   pipeline ขั้นที่ 1
 data/raw/                ไฟล์ดิบ (ไม่ขึ้น git)
 ```
