@@ -1,0 +1,16 @@
+# secrets
+.env
+
+# data (ไม่เอาข้อมูลขึ้น git)
+data/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
