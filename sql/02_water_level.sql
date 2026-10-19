@@ -1,3 +1,6 @@
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
 /* ขั้นที่ 2: ตารางรับข้อมูลระดับน้ำจากไฟล์ Excel (รันซ้ำได้)
    วิธีรัน: เปิดใน SSMS แล้วกด F5 */
 USE rain_dw;
