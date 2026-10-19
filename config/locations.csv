@@ -1,4 +1,17 @@
-location_id,name_th,name_en,latitude,longitude
-hatyai,อำเภอหาดใหญ่,Hat Yai,7.0084,100.4767
-songkhla,อำเภอเมืองสงขลา,Mueang Songkhla,7.1898,100.5951
-sadao,อำเภอสะเดา,Sadao,6.6386,100.4237
+location_id,amphoe_code,name_th,name_en,latitude,longitude
+songkhla,9001,อำเภอเมืองสงขลา,Mueang Songkhla,7.1898,100.5951
+sathingphra,9002,อำเภอสทิงพระ,Sathing Phra,7.4797,100.4369
+chana,9003,อำเภอจะนะ,Chana,6.9147,100.7400
+nathawi,9004,อำเภอนาทวี,Na Thawi,6.7333,100.6833
+thepha,9005,อำเภอเทพา,Thepha,6.8333,100.9667
+sabayoi,9006,อำเภอสะบ้าย้อย,Saba Yoi,6.6000,100.9500
+ranot,9007,อำเภอระโนด,Ranot,7.7833,100.3167
+krasaesin,9008,อำเภอกระแสสินธุ์,Krasae Sin,7.5667,100.3000
+rattaphum,9009,อำเภอรัตภูมิ,Rattaphum,7.1333,100.2667
+sadao,9010,อำเภอสะเดา,Sadao,6.6386,100.4237
+hatyai,9011,อำเภอหาดใหญ่,Hat Yai,7.0084,100.4767
+namom,9012,อำเภอนาหม่อม,Na Mom,6.9667,100.5333
+khuanniang,9013,อำเภอควนเนียง,Khuan Niang,7.1667,100.3833
+bangklam,9014,อำเภอบางกล่ำ,Bang Klam,7.0833,100.4167
+singhanakhon,9015,อำเภอสิงหนคร,Singhanakhon,7.2333,100.5500
+khlonghoikhong,9016,อำเภอคลองหอยโข่ง,Khlong Hoi Khong,6.8833,100.3500
