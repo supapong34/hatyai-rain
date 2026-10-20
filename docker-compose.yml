@@ -18,5 +18,32 @@ services:
       retries: 10
       start_period: 20s
 
+  # Airflow แบบ all-in-one (scheduler + web + dag processor ใน container เดียว) สำหรับเครื่องตัวเอง
+  airflow:
+    build: ./airflow
+    container_name: rain_airflow
+    command: standalone
+    user: "${AIRFLOW_UID:-1000}:0"             # ใช้ uid เดียวกับเจ้าของไฟล์โปรเจกต์ จะได้เขียน data/ ได้
+    depends_on:
+      mssql:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      MSSQL_HOST: mssql                         # ใน network ของ compose ใช้ชื่อ service แทน localhost
+      MSSQL_PORT: "1433"
+      DROP_ROOT: /data/raindrop
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Bangkok
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"   # เครื่องตัวเอง ไม่ต้อง login
+      AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"          # เห็น DAG ใหม่ภายใน 30 วินาที
+    ports:
+      - "8080:8080"
+    volumes:
+      - airflow_data:/opt/airflow               # metadata DB และ log ไม่หายเมื่อสร้าง container ใหม่
+      - ./dags:/opt/airflow/dags
+      - ./:/opt/airflow/project
+      - /mnt/c/RainDrop:/data/raindrop          # ไดรฟ์ R: ฝั่ง Windows
+
 volumes:
   mssql_data:
+  airflow_data:
