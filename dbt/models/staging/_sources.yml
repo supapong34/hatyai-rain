@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: raw
+    description: ข้อมูลที่ pipeline ขั้นที่ 1-2 โหลดเข้ามา
+    schema: raw
+    loaded_at_field: ingested_at
+    freshness:                                   # dbt source freshness: ข้อมูลเก่าเกินไปไหม
+      warn_after: {count: 2, period: hour}
+      error_after: {count: 6, period: hour}
+    tables:
+      - name: open_meteo_hourly
+        description: ฝนรายชั่วโมงจาก Open-Meteo, grain = location_id x ts
+      - name: water_level_readings
+        description: ระดับน้ำจากไฟล์ Excel, grain = station_id x reading_ts
+        freshness: null                          # ไฟล์มาไม่สม่ำเสมอ ไม่ตรวจความสด

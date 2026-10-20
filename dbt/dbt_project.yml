@@ -1,0 +1,46 @@
+name: hatyai_rain
+version: "1.0.0"
+profile: hatyai_rain
+
+model-paths: ["models"]
+seed-paths: ["seeds", "../config"]     # ใช้ CSV ใน config/ เป็น seed โดยตรง ไม่ต้องคัดลอกซ้ำ
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+seeds:
+  hatyai_rain:
+    +schema: ref                      # seed ทั้งหมดไปอยู่ schema ref
+    locations:
+      +column_types:
+        location_id: "varchar(50)"
+        amphoe_code: "varchar(4)"
+        name_th: "nvarchar(100)"          # NVARCHAR เพื่อเก็บภาษาไทย
+        name_en: "varchar(100)"
+        latitude: "decimal(9,6)"          # ต้องใส่ "" ไม่งั้น YAML ตัดที่จุลภาค
+        longitude: "decimal(9,6)"
+    water_stations:
+      +column_types:
+        station_id: "varchar(10)"
+        name_th: "nvarchar(100)"
+        aliases: "nvarchar(400)"
+        location_id: "varchar(50)"
+        warning_level_m: "decimal(6,2)"
+        critical_level_m: "decimal(6,2)"
+    rain_categories:
+      +column_types:
+        category_id: "int"
+        name_th: "nvarchar(50)"
+        name_en: "varchar(50)"
+        min_mm: "decimal(7,2)"
+        max_mm: "decimal(7,2)"
+
+models:
+  hatyai_rain:
+    staging:
+      +schema: stg
+      +materialized: view             # staging = view เบา ๆ แค่ทำความสะอาดและตั้งชื่อ
+    marts:
+      +schema: marts
+      +materialized: table            # marts = ตารางจริงสำหรับ Power BI อ่านเร็ว

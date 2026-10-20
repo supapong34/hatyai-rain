@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_rain_hourly
+    columns:
+      - name: location_id
+        data_tests: [not_null]
+      - name: ts
+        data_tests: [not_null]
+      - name: precipitation_mm
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0, max_value: 300}
+      - name: source
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['forecast', 'archive']}
+    data_tests:
+      - unique_combination:
+          arguments: {columns: ['location_id', 'ts']}
+
+  - name: stg_water_level
+    columns:
+      - name: station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: "ref('water_stations')", field: station_id}
+      - name: level_m
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0, max_value: 20}

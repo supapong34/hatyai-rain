@@ -1,0 +1,10 @@
+# SCD Type 2: ทุกครั้งที่ dbt snapshot รัน ถ้าข้อมูลอำเภอใน config/locations.csv เปลี่ยน
+# (เช่น ปรับพิกัด) แถวเดิมจะถูกปิด (dbt_valid_to) และเพิ่มแถวใหม่ ประวัติไม่หาย
+snapshots:
+  - name: snap_locations
+    relation: ref('locations')
+    config:
+      schema: snapshots
+      unique_key: location_id
+      strategy: check          # ไม่มีคอลัมน์ updated_at จึงเทียบค่าทุกคอลัมน์แทน
+      check_cols: all

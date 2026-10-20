@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: dim_location
+    description: อำเภอในสงขลา แบบ SCD Type 2 (หนึ่งแถวต่อหนึ่งเวอร์ชัน)
+    columns:
+      - name: location_sk
+        description: surrogate key ของแต่ละเวอร์ชัน
+        data_tests: [unique, not_null]
+      - name: location_id
+        description: natural key จากระบบต้นทาง
+        data_tests: [not_null]
+    data_tests:
+      - unique_combination:
+          arguments: {columns: ['location_id', 'valid_from']}
+
+  - name: dim_date
+    columns:
+      - name: date_key
+        data_tests: [unique, not_null]
+
+  - name: dim_station
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+
+  - name: dim_rain_category
+    columns:
+      - name: category_id
+        data_tests: [unique, not_null]
+
+  - name: fact_rainfall_hourly
+    description: ฝนรายชั่วโมง grain = location_id x ts
+    data_tests:
+      - unique_combination:
+          arguments: {columns: ['location_id', 'ts']}
+    columns:
+      - name: location_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: "ref('dim_location')", field: location_sk}
+      - name: date_key
+        data_tests:
+          - relationships:
+              arguments: {to: "ref('dim_date')", field: date_key}
+
+  - name: fact_rainfall_daily
+    description: ฝนรายวัน grain = location_id x date_th
+    data_tests:
+      - unique_combination:
+          arguments: {columns: ['location_id', 'date_th']}
+    columns:
+      - name: rain_category_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: "ref('dim_rain_category')", field: category_id}
+      - name: hours_recorded
+        data_tests:
+          - value_between:
+              arguments: {min_value: 1, max_value: 24}
+
+  - name: fact_water_level
+    description: ระดับน้ำ grain = station_id x reading_ts
+    data_tests:
+      - unique_combination:
+          arguments: {columns: ['station_id', 'reading_ts']}
+    columns:
+      - name: level_status
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['normal', 'watch', 'critical']}

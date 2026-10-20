@@ -1,0 +1,16 @@
+# อ่านค่าจาก environment variables ไม่มีรหัสผ่านในไฟล์ (ขึ้น git ได้)
+hatyai_rain:
+  target: dev
+  outputs:
+    dev:
+      type: sqlserver
+      backend: mssql-python             # driver ของ Microsoft ไม่ต้องติดตั้ง ODBC
+      server: "{{ env_var('MSSQL_HOST', 'localhost') }}"
+      port: "{{ env_var('MSSQL_PORT', '1433') | int }}"
+      database: "{{ env_var('MSSQL_DB', 'rain_dw') }}"
+      schema: dbo
+      user: "{{ env_var('MSSQL_USER', 'sa') }}"
+      password: "{{ env_var('MSSQL_SA_PASSWORD') }}"
+      encrypt: true
+      trust_cert: true                  # SQL Server ใน Docker ใช้ certificate ที่สร้างเอง
+      threads: 4
