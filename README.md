@@ -1,106 +1,105 @@
-# Hat Yai Rain
+# Hat Yai Rain — SQL Server Data Platform
 
-Data pipeline สำหรับติดตามปริมาณฝนและระดับน้ำในพื้นที่หาดใหญ่และจังหวัดสงขลา
-ดึง API, รับไฟล์ Excel, Data Quality, Star Schema, Orchestration และ Dashboard
+ระบบฐานข้อมูล SQL Server สำหรับข้อมูลฝน ระดับน้ำ และอุปกรณ์สถานีวัดน้ำของจังหวัดสงขลา
+รับข้อมูลจาก API และไฟล์ Excel ตรวจคุณภาพก่อนโหลด แปลงข้อมูลด้วย T-SQL และ dbt
+ตั้งเวลาด้วย SQL Server Agent และ Airflow และส่งสำเนาไปอีก server ด้วย Transactional Replication
 
-## Architecture (เป้าหมาย)
+## ภาพรวม
 
 ```
-Open-Meteo API ──(ทุกชั่วโมง)──┐
-                               ├─> raw (JSON) ─> SQL Server raw ─> dbt ─> Star Schema ─> Power BI
-inbox/*.xlsx ──(วางไฟล์)───────┘
+Open-Meteo API ──┐
+Excel ระดับน้ำ ───┼──> [mssql :1433]  raw / meta ──> rpt, marts
+CSV อุปกรณ์ ─────┘          │
+                            └── Transactional Replication ──> [mssql2 :1434]  raw / meta (read-only)
 ```
 
-## Roadmap
+| ข้อมูล | ปริมาณ | เข้าระบบโดย | รอบ |
+|---|---|---|---|
+| ฝนรายชั่วโมง 16 อำเภอ (2021–ปัจจุบัน) | ~814,000 แถว | Python + Airflow | ทุกชั่วโมง |
+| ระดับน้ำ 4 สถานี (ข้อมูลจำลอง) | รายวัน | Python + Airflow | ทุก 5 นาที |
+| ทะเบียนอุปกรณ์ (ข้อมูลจำลอง) | master data | T-SQL BULK INSERT + SQL Agent | ทุก 15 นาที |
 
-- [x] **ขั้น 1** ดึงฝนรายชั่วโมงจาก Open-Meteo โหลดเข้า SQL Server (incremental + backfill)
-- [x] **ขั้น 2** รับไฟล์ Excel ระดับน้ำผ่านโฟลเดอร์ inbox พร้อม validate
-- [ ] **ขั้น 3** Orchestration ด้วย Airflow
-- [ ] **ขั้น 4** dbt แปลงเป็น Star Schema พร้อม tests และ snapshot (SCD2)
-- [ ] **ขั้น 5** Power BI dashboard
+## ฐานข้อมูลทำอะไร
 
-## Data Source
-
-[Open-Meteo](https://open-meteo.com) ข้อมูลจากแบบจำลองสภาพอากาศ ไม่ใช่ค่าจากสถานีวัดโดยตรง
-ใช้งานฟรีสำหรับงานที่ไม่ใช่เชิงพาณิชย์ ไม่ต้องมี API key
-พิกัดใน `config/locations.csv` เป็นค่าโดยประมาณของแต่ละอำเภอ
-
-## Design Decisions
-
-| เรื่อง | การตัดสินใจ | เหตุผล |
+| server | schema | หน้าที่ |
 |---|---|---|
-| Grain | 1 พิกัด ต่อ 1 ชั่วโมง | ตรงกับความละเอียดของ API |
-| Incremental | ดึงย้อนหลัง 3 วันทุกรอบ + upsert | ค่าล่าสุดอาจถูกปรับแก้ จึงดึงทับแทนใช้ watermark |
-| Idempotency | `PRIMARY KEY (location_id, ts)` + `MERGE` | รันซ้ำแล้วข้อมูลไม่ซ้ำ |
-| Load metrics | `MERGE ... OUTPUT $action` | แยกนับแถวที่เพิ่มใหม่กับแถวที่อัปเดต |
-| Raw layer | เก็บ JSON ดิบทุกครั้ง | ย้อนประมวลผลใหม่ได้โดยไม่ต้องเรียก API |
-| Timezone | `DATETIMEOFFSET` | เก็บเวลาพร้อม offset +07:00 กันความสับสนเรื่องเวลา |
-| Data quality | หยุดทั้งรอบเมื่อพบค่าผิดปกติ | ไม่ให้ข้อมูลเสียเข้าฐาน |
-| Observability | `meta.pipeline_runs` | ดูสถานะ จำนวนแถว และข้อผิดพลาดย้อนหลัง |
+| mssql | `raw` | ข้อมูลที่ผ่านการตรวจแล้ว มี primary key ทุกตาราง โหลดด้วย MERGE รันซ้ำได้ไม่เกิดข้อมูลซ้ำ |
+| mssql | `meta` | log ทุกการรัน (`pipeline_runs`) และทุกไฟล์ที่เข้ามา (`file_loads`) |
+| mssql | `ref`, `snapshots` | master data: อำเภอ สถานี เกณฑ์ฝน และประวัติแบบ SCD Type 2 |
+| mssql | `marts` | Star Schema: `dim_location`, `dim_date`, `dim_station`, `dim_rain_category`, `fact_rainfall_hourly`, `fact_rainfall_daily`, `fact_water_level` |
+| mssql | `rpt` | ตารางรายงาน `monthly_rain` จาก stored procedure |
+| mssql2 | `raw`, `meta` | replica อ่านอย่างเดียวสำหรับทีมอื่น ไม่กระทบ server หลัก |
+
+## SQL ที่ใช้
+
+| เทคนิค | ใช้ทำอะไร | ไฟล์ |
+|---|---|---|
+| MERGE + OUTPUT `$action` | upsert และนับ insert / update แยกกัน | `sql/lab/lab2_usp_build_monthly_rain.sql` |
+| Temp table (`#temp`) + index | พักข้อมูลกลางทางใน stored procedure | `sql/lab/lab2_usp_build_monthly_rain.sql` |
+| BULK INSERT + dynamic SQL | อ่านไฟล์ CSV จากไดรฟ์กลาง | `sql/lab/lab4_station_equipment.sql` |
+| `EXISTS (... EXCEPT ...)` | อัปเดตเฉพาะแถวที่ค่าเปลี่ยน รองรับ NULL | `sql/lab/lab4_station_equipment.sql` |
+| `TRY/CATCH` + `XACT_ABORT` + `THROW` | rollback ทั้งก้อนและบันทึก error ลง log | `sql/lab/*.sql` |
+| Filtered unique index | กันไฟล์ซ้ำเฉพาะสถานะที่โหลดสำเร็จ | `sql/02_water_level.sql` |
+| `DATETIMEOFFSET`, `SWITCHOFFSET` | เก็บเวลาพร้อม timezone ตัดวันตามเวลาไทย | `sql/init.sql` |
+| Window function | ฝนสะสม 3 / 7 วัน | `dbt/models/marts/fact_rainfall_daily.sql` |
+| Login, Role, GRANT / DENY ระดับ schema | แยกสิทธิ์ ETL กับนักวิเคราะห์ | `sql/security/roles.sql` |
+| Ownership chaining | ให้สิทธิ์รัน procedure แทนสิทธิ์เขียนตาราง | `sql/security/roles.sql` |
+| SQL Server Agent Job | ตั้งเวลารัน procedure และโหลดไฟล์ | `sql/jobs/` |
+| Transactional Replication | ส่ง 5 ตารางไป server ที่สอง แบบ push subscription | `sql/repl/` |
+
+## Jobs
+
+| job | เครื่องมือ | รอบ | ทำอะไร |
+|---|---|---|---|
+| load equipment csv | SQL Server Agent | 15 นาที | BULK INSERT ไฟล์อุปกรณ์ แปลงเป็นพิมพ์ใหญ่ ตรวจ และ MERGE |
+| rpt - build monthly rain | SQL Server Agent | 07:00 | สร้างรายงานฝนรายเดือน |
+| Log Reader / Distribution Agent | SQL Server Agent | ต่อเนื่อง | replication ไป mssql2 |
+| `rain_api_hourly` | Airflow | ทุกชั่วโมง | ดึงฝนจาก API และตรวจความครบ 24 ชั่วโมง |
+| `water_level_inbox` | Airflow | 5 นาที | โหลดไฟล์ Excel ระดับน้ำ |
+| `dbt_build_daily` | Airflow | 06:30 | สร้าง Star Schema และรัน data tests |
+
+## Data Quality
+
+- ตรวจระดับไฟล์ (sheet, หัวคอลัมน์, ไฟล์เสีย) และระดับแถว (ค่าว่าง, ช่วงค่า, สถานีมีจริง)
+- กันไฟล์ซ้ำด้วย SHA-256
+- แถวที่ไม่ผ่านถูกแยกเก็บพร้อมเหตุผล (`*_errors.csv`, `raw.station_equipment_rejects`)
+- ตรวจความครบรายวันใน Airflow และ dbt tests 27 ตัว
+
+## สิ่งที่ทำแล้ว
+
+- [x] Ingestion จาก API และไฟล์ Excel พร้อม data quality
+- [x] Star Schema ด้วย dbt พร้อม SCD Type 2 และ data tests
+- [x] Security: login, role, สิทธิ์ระดับ schema
+- [x] ELT ด้วย stored procedure + temp table + MERGE
+- [x] SQL Server Agent Job
+- [x] BULK INSERT จากไฟล์ที่เจ้าหน้าที่กรอก
+- [x] Transactional Replication ไป server ที่สอง
+- [x] Orchestration ด้วย Airflow
 
 ## Setup
 
-ต้องมี Docker, Python 3.10+ และ SSMS (ถ้าจะดูข้อมูลผ่านหน้าจอ)
+ต้องมี Docker, Python 3.10+ และ SSMS
 
 ```bash
-cp .env.example .env            # แล้วแก้รหัสผ่าน sa
-docker compose up -d            # เปิด SQL Server 2022 (Developer edition)
-docker ps                       # รอจนขึ้น (healthy)
+cp .env.example .env                 # ตั้งรหัส sa
+docker compose up -d                 # mssql, mssql2, airflow
+./sqlrun.sh rain_mssql sql/init.sql
+./sqlrun.sh rain_mssql sql/02_water_level.sql
 
-# สร้างฐานข้อมูลและตาราง (หรือเปิด sql/init.sql ใน SSMS แล้วกด F5)
-docker exec rain_mssql bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -i /sql/init.sql'
-
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python src/ingest_rain_api.py --mode backfill --start 2021-01-01 --end 2026-10-16
 ```
 
-## Run
+จากนั้นรันไฟล์ใน `sql/security/`, `sql/lab/`, `sql/jobs/` ผ่าน SSMS และตั้ง replication ตาม `sql/repl/`
 
-```bash
-# เติมข้อมูลย้อนหลังครั้งแรก
-python src/ingest_rain_api.py --mode backfill --start 2026-09-01 --end 2026-10-15
-
-# ดึงข้อมูลล่าสุด (ใช้รันทุกชั่วโมง)
-python src/ingest_rain_api.py --mode incremental
-```
-
-## Step 2: Excel inbox (ระดับน้ำ)
-
-ข้อมูลระดับน้ำเป็น **ข้อมูลจำลอง** ของ 4 จุดตามคลองอู่ตะเภา (`config/water_stations.csv`)
-
-```bash
-# สร้างตาราง: เปิด sql/02_water_level.sql ใน SSMS แล้วกด F5
-
-python src/make_sample_excel.py --days 7 --with-errors   # สร้างไฟล์ตัวอย่างใน data/inbox
-python src/ingest_excel_inbox.py                         # ประมวลผลทุกไฟล์ใน inbox
-```
-
-| กรณี | ผลลัพธ์ |
+| เครื่องมือ | เชื่อมต่อ |
 |---|---|
-| ไฟล์ปกติ | `data/processed/` |
-| บางแถวผิด | โหลดแถวที่ถูก แถวที่ผิดเขียนลง `data/rejected/*_errors.csv` |
-| หัวคอลัมน์ไม่ครบ / ไม่มี sheet / เปิดไม่ได้ | ปฏิเสธทั้งไฟล์ ย้ายไป `data/rejected/` |
-| เนื้อหาซ้ำกับไฟล์เดิม (SHA-256) | ข้าม ไม่โหลดซ้ำ |
-| วันที่ปี พ.ศ., เวลา `6.00` หรือ `6.00 น.`, ชื่อสถานีมีช่องว่าง | แปลงให้อัตโนมัติ |
+| SSMS server หลัก | `localhost,1433` |
+| SSMS server replica | `localhost,1434` |
+| Airflow | http://localhost:8080 |
 
-ทุกไฟล์ถูกบันทึกใน `meta.file_loads` และทุกแถวใน `raw.water_level_readings` มี `source_file` บอกว่ามาจากไฟล์ไหน
+## Data Source
 
-## Check (SSMS)
-
-เชื่อมต่อด้วย Server `localhost,1433`, SQL Server Authentication, login `sa`
-และติ๊ก **Trust server certificate** จากนั้นเปิด `sql/queries.sql`
-
-## Project Structure
-
-```
-config/locations.csv     พิกัดที่ต้องการดึงข้อมูล
-sql/init.sql             สร้างฐานข้อมูล schema และตาราง
-sql/queries.sql          query ตัวอย่างสำหรับฝึกใน SSMS
-sql/02_water_level.sql   ตารางระดับน้ำและ log ไฟล์ (ขั้นที่ 2)
-config/water_stations.csv  สถานีวัดระดับน้ำ (จำลอง) และชื่อเรียกอื่น
-src/make_sample_excel.py   สร้างไฟล์ Excel ตัวอย่าง
-src/ingest_excel_inbox.py  pipeline ขั้นที่ 2
-src/ingest_rain_api.py   pipeline ขั้นที่ 1
-data/raw/                ไฟล์ดิบ (ไม่ขึ้น git)
-```
+[Open-Meteo](https://open-meteo.com) ข้อมูลจากแบบจำลองสภาพอากาศ ใช้งานฟรีสำหรับงานที่ไม่ใช่เชิงพาณิชย์
+พิกัดใน `config/locations.csv` เป็นค่าโดยประมาณของแต่ละอำเภอ ข้อมูลระดับน้ำและอุปกรณ์เป็นข้อมูลจำลอง
